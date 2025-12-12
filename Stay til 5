@@ -1,0 +1,8 @@
+$wshell = New-Object -com wscript.shell
+$wshell.SendKeys([char]173)
+#start msedge.exe "-- https://"
+#while (1) {$wshell.sendkeys("{SCROLLLOCK}"); SLEEP 300}
+while ((get-date) -lt (get-date).date.addhours(17)) {$wshell.sendkeys("{SCROLLLOCK}"); SLEEP 300}
+$wshell.SendKeys([char]173)
+#start chrome.exe "-- https://" 
+cls
