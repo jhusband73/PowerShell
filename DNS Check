@@ -1,0 +1,65 @@
+
+# Define the remote host and port for Test-NetConnection
+$remoteHost = "who.me"
+$port = 636
+$filterIp = "10.x.x.9"
+
+# Define email settings
+$smtpServer = "smtp.com"
+$smtpFrom = "From.me"
+$smtpTo = "To.me"
+$emailSubject = "Ping and Test-NetConnection Report for Server"
+
+# Function to get IP addresses from nslookup
+function Get-IpAddressesFromNslookup {
+    param (
+        [string]$hostname
+    )
+    $nslookupResult = nslookup $hostname | Select-String -Pattern "\b\d{1,3}(\.\d{1,3}){3}\b" | ForEach-Object { $_.Matches.Value }
+    return $nslookupResult[1..($nslookupResult.Length - 1)]
+}
+
+# Initialize variables
+$failures = ""
+
+# Get the current timestamp
+$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+# Perform nslookup to retrieve a list of IP addresses for the remote host
+$ipAddresses = Get-IpAddressesFromNslookup -hostname $remoteHost
+
+# Check if any IP addresses were returned
+if ($ipAddresses) {
+    foreach ($server in $ipAddresses) {
+        # Perform the ping test
+        $pingResult = Test-Connection -ComputerName $server -Count 4 -ErrorAction SilentlyContinue
+        if (-not $pingResult) {
+            $failures += "$timestamp - Pings to $server failed.`n"
+        } elseif ($pingResult | Where-Object { $_.StatusCode -ne 0 }) {
+            $failures += "$timestamp - Pings to $server encountered issues. Average response time: $(($pingResult.ResponseTime | Measure-Object -Maximum).Maximum) ms`n"
+        }
+
+        # Perform the network connection test
+        $testResult = Test-NetConnection -ComputerName $server -Port $port
+
+        # Check if the TCP test succeeded and append the result to the failures
+        if (-not $testResult.TcpTestSucceeded) {
+            $failures += "$timestamp - Test-NetConnection to $server on port $port Failed`n"
+        }
+    }
+} else {
+    $failures += "$timestamp - nslookup failed for $remoteHost.`n"
+}
+
+# Check if there are any failures to report
+if ($failures) {
+    # Prepare the email body
+    $emailBody = "Failures detected for $remoteHost \n$failures"
+
+    # Send the email
+    Send-MailMessage -SmtpServer $smtpServer -From $smtpFrom -To $smtpTo -Subject $emailSubject -Body $emailBody -Priority High
+
+    # Optional: Write the failures to a log file if needed
+    # $logFile = "C:\Path\To\FailureLogFile.log"
+    # Add-Content -Path $logFile -Value $failures
+}
